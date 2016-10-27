@@ -21,6 +21,8 @@ import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
 
 import static de.htw_berlin.bischoff.daniel.wikiscout.R.id.map;
 
@@ -55,6 +57,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         mMap = googleMap;
 
         enableMyLocationIcon();
+        addPlaceholderMarkers();
     }
 
     @Override
@@ -68,6 +71,26 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 }
             }
         }
+    }
+
+    protected void addPlaceholderMarkers() {
+        LatLng pos1 = new LatLng(52.3924, 13.480);
+        Marker marker1 = mMap.addMarker(new MarkerOptions()
+                .position(pos1)
+                .title("Interessant!")
+                .snippet("Hier wurden kürzlich 463234 Grashalme gezählt."));
+
+        LatLng pos2 = new LatLng(52.3994, 13.490);
+        Marker marker2 = mMap.addMarker(new MarkerOptions()
+                .position(pos2)
+                .title("Interessant!")
+                .snippet("Hier wurden kürzlich 463234 Grashalme gezählt."));
+
+        LatLng pos3 = new LatLng(52.4054, 13.5178);
+        Marker marker3 = mMap.addMarker(new MarkerOptions()
+                .position(pos3)
+                .title("Interessant!")
+                .snippet("Hier wurden kürzlich 463234 Grashalme gezählt."));
     }
 
     protected synchronized void buildGoogleApiClient() {
@@ -112,7 +135,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     private void moveToCurrentLocation() {
-        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(mCurrentLocation.getLatitude(), mCurrentLocation.getLongitude()), 16));
+        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(mCurrentLocation.getLatitude(), mCurrentLocation.getLongitude()), 14));
     }
 
     @Override
