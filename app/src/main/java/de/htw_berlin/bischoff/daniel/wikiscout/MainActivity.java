@@ -28,8 +28,6 @@ import org.json.*;
 import com.loopj.android.http.*;
 import com.loopj.android.http.RequestParams;
 
-import java.util.Iterator;
-
 import cz.msebera.android.httpclient.Header;
 
 import static de.htw_berlin.bischoff.daniel.wikiscout.R.id.map;
@@ -67,6 +65,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     public void onMapReady(GoogleMap googleMap) {
         mapReady = true;
         mMap = googleMap;
+
+        googleMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
 
         mGoogleApiClient.connect();
         enableMyLocationIcon();
@@ -115,7 +115,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         mMap.addMarker(new MarkerOptions()
                 .position(pos)
                 .title(title)
-                .snippet(description != null ? description: ""));
+                .snippet(description != null ? description : ""));
     }
 
     protected synchronized void buildGoogleApiClient() {
@@ -159,7 +159,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     private void moveToCurrentLocation() {
-        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(mCurrentLocation.getLatitude(), mCurrentLocation.getLongitude()), 14));
+        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(mCurrentLocation.getLatitude(), mCurrentLocation.getLongitude()), 15));
     }
 
     @Override
@@ -222,7 +222,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         params.put("generator", "geosearch");
         params.put("ggscoord", lat + "|" + lon);
         params.put("ggsradius", "2000");
-        params.put("ggslimit", "20");
+        params.put("ggslimit", "50");
         params.put("format", "json");
         params.put("wbptterms", "description");
 
@@ -242,28 +242,41 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                     // System.out.println(entries.names());
 
                     for (int i = 0; i < entries.names().length(); i++) {
+                        // System.out.println(entry);
+
                         String key = entries.names().getString(i);
                         JSONObject entry = entries.getJSONObject(key);
+                        JSONObject terms = entry.optJSONObject("terms");
+                        JSONArray coordinates = entry.optJSONArray("coordinates");
 
-                        System.out.println(entry);
+                        String title;
+                        double lat = 0.0;
+                        double lon = 0.0;
+                        String description = null;
 
-                        System.out.println("lat: " + entry.getJSONArray("coordinates").getJSONObject(0).getDouble("lat"));
-                        System.out.println("lon: " + entry.getJSONArray("coordinates").getJSONObject(0).getDouble("lon"));
-                        System.out.println("title: " + entry.getString("title"));
-                        // System.out.println("description: " + entry.getJSONObject("terms").getJSONArray("description").getString(0));
+                        title = entry.optString("title");
 
-                        double lat = entry.getJSONArray("coordinates").getJSONObject(0).getDouble("lat");
-                        double lon = entry.getJSONArray("coordinates").getJSONObject(0).getDouble("lon");
-                        String title = entry.getString("title");
-                        String description = entry.getJSONObject("terms").getJSONArray("description").getString(0);
+                        if ((coordinates != null) && (coordinates.optJSONObject(0) != null)) {
+                            lat = coordinates.getJSONObject(0).optDouble("lat");
+                            lon = coordinates.getJSONObject(0).optDouble("lon");
 
-                        System.out.println("Values: " + lat + " " + lon + " " + title + " " + description);
+                            System.out.println("lat: " + lat);
+                            System.out.println("lon: " + lon);
+                        }
 
-                        addMarker(lat, lon, title, description != null ? description : null);
-                        System.out.println(entry);
+                        if ((terms != null) && (terms.optJSONArray("description") != null)) {
+                            description = terms.optJSONArray("description").optString(0);
+
+                            System.out.println("description : " + description);
+                        }
+
+                        if (title != null && (lat != 0.0) && (lon != 0.0)) {
+                            addMarker(lat, lon, title, description);
+                            System.out.println(entry);
+                        }
                     }
                 } catch (JSONException e) {
-                    // say something
+                    e.printStackTrace();
                 }
             }
 
