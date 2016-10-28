@@ -24,14 +24,25 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 
+import org.json.*;
+import com.loopj.android.http.*;
+import com.loopj.android.http.RequestParams;
+
+import java.util.Iterator;
+
+import cz.msebera.android.httpclient.Header;
+
 import static de.htw_berlin.bischoff.daniel.wikiscout.R.id.map;
 
 public class MainActivity extends AppCompatActivity implements OnMapReadyCallback, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LocationListener {
 
     protected GoogleApiClient mGoogleApiClient;
     protected Location mCurrentLocation;
+    protected Location mLastMarkerUpdateLocation;
     protected LocationRequest mLocationRequest;
     protected GoogleMap mMap;
+    protected boolean mapReady = false;
+    protected boolean googleApiClientReady = false;
 
     private static final int PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 511;
     public static final long UPDATE_INTERVAL_IN_MILLISECONDS = 5000;
@@ -54,10 +65,12 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     @Override
     public void onMapReady(GoogleMap googleMap) {
+        mapReady = true;
         mMap = googleMap;
 
+        mGoogleApiClient.connect();
         enableMyLocationIcon();
-        addPlaceholderMarkers();
+        // addPlaceholderMarkers();
     }
 
     @Override
@@ -87,10 +100,22 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 .snippet("Hier wurden kürzlich 463234 Grashalme gezählt."));
 
         LatLng pos3 = new LatLng(52.4054, 13.5178);
+
         Marker marker3 = mMap.addMarker(new MarkerOptions()
                 .position(pos3)
                 .title("Interessant!")
                 .snippet("Hier wurden kürzlich 463234 Grashalme gezählt."));
+    }
+
+    public void addMarker(double lat, double lon, String title, String description) {
+        // System.out.println("New marker: " + title + " " + lat + " " + lon);
+        // System.out.println("Map and google client ready: " + (mapReady && googleApiClientReady));
+
+        LatLng pos = new LatLng(lat, lon);
+        mMap.addMarker(new MarkerOptions()
+                .position(pos)
+                .title(title)
+                .snippet(description != null ? description: ""));
     }
 
     protected synchronized void buildGoogleApiClient() {
@@ -110,7 +135,6 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     protected void onStart() {
-        mGoogleApiClient.connect();
         super.onStart();
     }
 
@@ -140,6 +164,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     @Override
     public void onConnected(@Nullable Bundle bundle) {
+        googleApiClientReady = true;
         createLocationRequest();
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
@@ -150,9 +175,19 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         if (mCurrentLocation != null) {
             moveToCurrentLocation();
+
+            updateMarker();
         }
 
         startLocationUpdates();
+    }
+
+    protected void updateMarker() {
+        try {
+            getEntries(String.valueOf(mCurrentLocation.getLatitude()), String.valueOf(mCurrentLocation.getLongitude()));
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
     }
 
     @Override
@@ -167,7 +202,77 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     @Override
     public void onLocationChanged(Location location) {
+        if ((mLastMarkerUpdateLocation != null) && (mLastMarkerUpdateLocation.distanceTo(location) >= 500)) {
+            updateMarker();
+        }
+
         mCurrentLocation = location;
         moveToCurrentLocation();
+    }
+
+    public void getEntries(String lat, String lon) throws JSONException {
+
+        RequestParams params = new RequestParams();
+        params.put("action", "query");
+        params.put("prop", "coordinates|pageimages|pageterms");
+        params.put("colimit", "50");
+        params.put("piprop", "thumbnail");
+        params.put("pithumbsize", "144");
+        params.put("pilimit", "50");
+        params.put("generator", "geosearch");
+        params.put("ggscoord", lat + "|" + lon);
+        params.put("ggsradius", "2000");
+        params.put("ggslimit", "20");
+        params.put("format", "json");
+        params.put("wbptterms", "description");
+
+        WikiRestClient.get("/", params, new JsonHttpResponseHandler() {
+
+            @Override
+            public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
+                // If the response is JSONObject instead of expected JSONArray
+
+                mLastMarkerUpdateLocation = mCurrentLocation;
+
+                try {
+                    JSONObject entries = response.getJSONObject("query").getJSONObject("pages");
+
+                    System.out.println("Response: " + entries);
+                    System.out.println("Entries: " + entries.names().length());
+                    // System.out.println(entries.names());
+
+                    for (int i = 0; i < entries.names().length(); i++) {
+                        String key = entries.names().getString(i);
+                        JSONObject entry = entries.getJSONObject(key);
+
+                        System.out.println(entry);
+
+                        System.out.println("lat: " + entry.getJSONArray("coordinates").getJSONObject(0).getDouble("lat"));
+                        System.out.println("lon: " + entry.getJSONArray("coordinates").getJSONObject(0).getDouble("lon"));
+                        System.out.println("title: " + entry.getString("title"));
+                        // System.out.println("description: " + entry.getJSONObject("terms").getJSONArray("description").getString(0));
+
+                        double lat = entry.getJSONArray("coordinates").getJSONObject(0).getDouble("lat");
+                        double lon = entry.getJSONArray("coordinates").getJSONObject(0).getDouble("lon");
+                        String title = entry.getString("title");
+                        String description = entry.getJSONObject("terms").getJSONArray("description").getString(0);
+
+                        System.out.println("Values: " + lat + " " + lon + " " + title + " " + description);
+
+                        addMarker(lat, lon, title, description != null ? description : null);
+                        System.out.println(entry);
+                    }
+                } catch (JSONException e) {
+                    // say something
+                }
+            }
+
+            @Override
+            public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
+                System.out.println("status code: " + statusCode);
+                System.out.println("headers: " + headers);
+                System.out.println("json: " + errorResponse);
+            }
+        });
     }
 }
