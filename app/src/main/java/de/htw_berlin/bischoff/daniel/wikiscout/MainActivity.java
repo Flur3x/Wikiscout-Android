@@ -1,14 +1,15 @@
 package de.htw_berlin.bischoff.daniel.wikiscout;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.Location;
+import android.os.Build;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
-import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 
 import com.google.android.gms.common.ConnectionResult;
@@ -27,24 +28,25 @@ import com.google.android.gms.maps.model.MarkerOptions;
 import org.json.*;
 import com.loopj.android.http.*;
 import com.loopj.android.http.RequestParams;
+import com.nostra13.universalimageloader.core.ImageLoader;
+import com.nostra13.universalimageloader.core.ImageLoaderConfiguration;
+
+import java.util.Arrays;
 
 import cz.msebera.android.httpclient.Header;
 
 import static de.htw_berlin.bischoff.daniel.wikiscout.R.id.map;
 
-public class MainActivity extends AppCompatActivity implements OnMapReadyCallback, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LocationListener {
+public class MainActivity extends RuntimePermissionsActivity implements OnMapReadyCallback, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LocationListener {
 
-    protected GoogleApiClient mGoogleApiClient;
-    protected Location mCurrentLocation;
-    protected Location mLastMarkerUpdateLocation;
-    protected LocationRequest mLocationRequest;
-    protected GoogleMap mMap;
-    protected boolean mapReady = false;
-    protected boolean googleApiClientReady = false;
+    private GoogleApiClient mGoogleApiClient;
+    private Location mCurrentLocation;
+    private Location mLastMarkerUpdateLocation;
+    private GoogleMap mMap;
+    private boolean mapReady;
 
-    private static final int PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 511;
-    public static final long UPDATE_INTERVAL_IN_MILLISECONDS = 5000;
-    public static final long FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS = UPDATE_INTERVAL_IN_MILLISECONDS / 5;
+    private static final long UPDATE_INTERVAL_IN_MILLISECONDS = 5000;
+    private static final long FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS = UPDATE_INTERVAL_IN_MILLISECONDS / 5;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,55 +56,75 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         Toolbar Toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(Toolbar);
 
-        // Obtain the SupportMapFragment and get notified when the map is ready to be used.
+        WikiRestClient.setup();
+
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(map);
         mapFragment.getMapAsync(this);
 
-        buildGoogleApiClient();
+        ImageLoaderConfiguration config = new ImageLoaderConfiguration.Builder(this).build();
+        ImageLoader.getInstance().init(config);
     }
 
     @Override
     public void onMapReady(GoogleMap googleMap) {
-        mapReady = true;
         mMap = googleMap;
+        mapReady = true;
 
-        googleMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
+        //enableMyLocationIcon
+        moveToCurrentLocation();
+        updateMarkers();
 
-        mGoogleApiClient.connect();
-        enableMyLocationIcon();
-        // addPlaceholderMarkers();
+        if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                buildGoogleApiClient();
+                mMap.setMyLocationEnabled(true);
+            }
+        } else {
+            buildGoogleApiClient();
+            mMap.setMyLocationEnabled(true);
+        }
+
+        mMap.setOnInfoWindowClickListener(new GoogleMap.OnInfoWindowClickListener() {
+            @Override
+            public void onInfoWindowClick(Marker marker) {
+                System.out.println("CLICKED ON INFO WINDOW: " + marker.getTitle());
+
+                Intent intent = new Intent(getApplicationContext(), WikiEntryActivity.class);
+                String title = marker.getTitle();
+
+                intent.putExtra("title", title);
+                startActivity(intent);
+            }
+        });
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
+    public void onPermissionsGranted(int requestCode) {
         switch (requestCode) {
-            case PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION: {
-                // If request is cancelled, the result arrays are empty.
-                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    enableMyLocationIcon();
-                    startLocationUpdates();
+            case PermissionCodes.PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION: {
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                    if (mGoogleApiClient == null) {
+                        buildGoogleApiClient();
+                    }
+                    mMap.setMyLocationEnabled(true);
                 }
             }
         }
     }
 
     protected void addPlaceholderMarkers() {
-        LatLng pos1 = new LatLng(52.3924, 13.480);
-        Marker marker1 = mMap.addMarker(new MarkerOptions()
-                .position(pos1)
+        mMap.addMarker(new MarkerOptions()
+                .position(new LatLng(52.3924, 13.480))
                 .title("Interessant!")
                 .snippet("Hier wurden kürzlich 463234 Grashalme gezählt."));
 
-        LatLng pos2 = new LatLng(52.3994, 13.490);
-        Marker marker2 = mMap.addMarker(new MarkerOptions()
-                .position(pos2)
+        mMap.addMarker(new MarkerOptions()
+                .position(new LatLng(52.3994, 13.490))
                 .title("Interessant!")
                 .snippet("Hier wurden kürzlich 463234 Grashalme gezählt."));
 
-        LatLng pos3 = new LatLng(52.4054, 13.5178);
-
-        Marker marker3 = mMap.addMarker(new MarkerOptions()
-                .position(pos3)
+        mMap.addMarker(new MarkerOptions()
+                .position(new LatLng(52.4054, 13.5178))
                 .title("Interessant!")
                 .snippet("Hier wurden kürzlich 463234 Grashalme gezählt."));
     }
@@ -124,14 +146,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 .addOnConnectionFailedListener(this)
                 .addApi(LocationServices.API)
                 .build();
-    }
-
-    private void enableMyLocationIcon() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            mMap.setMyLocationEnabled(true);
-        } else {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION);
-        }
+        mGoogleApiClient.connect();
     }
 
     protected void onStart() {
@@ -143,50 +158,47 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         super.onStop();
     }
 
-    protected void createLocationRequest() {
-        mLocationRequest = new LocationRequest();
+    protected void startLocationUpdates() {
+        LocationRequest mLocationRequest = new LocationRequest();
         mLocationRequest.setInterval(UPDATE_INTERVAL_IN_MILLISECONDS);
         mLocationRequest.setFastestInterval(FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS);
         mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
-    }
 
-    protected void startLocationUpdates() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, this);
         } else {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION);
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, PermissionCodes.PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION);
         }
     }
 
     private void moveToCurrentLocation() {
-        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(mCurrentLocation.getLatitude(), mCurrentLocation.getLongitude()), 15));
+        if (mCurrentLocation != null) {
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(mCurrentLocation.getLatitude(), mCurrentLocation.getLongitude()), 17));
+        }
     }
 
     @Override
     public void onConnected(@Nullable Bundle bundle) {
-        googleApiClientReady = true;
-        createLocationRequest();
-
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             mCurrentLocation = LocationServices.FusedLocationApi.getLastLocation(mGoogleApiClient);
         } else {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION);
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, PermissionCodes.PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION);
         }
 
-        if (mCurrentLocation != null) {
-            moveToCurrentLocation();
+        System.out.println("LOCATION: " + mCurrentLocation);
 
-            updateMarker();
-        }
-
+        moveToCurrentLocation();
         startLocationUpdates();
+        updateMarkers();
     }
 
-    protected void updateMarker() {
-        try {
-            getEntries(String.valueOf(mCurrentLocation.getLatitude()), String.valueOf(mCurrentLocation.getLongitude()));
-        } catch (JSONException e) {
-            e.printStackTrace();
+    protected void updateMarkers() {
+        if (mCurrentLocation != null) {
+            try {
+                getEntries(String.valueOf(mCurrentLocation.getLatitude()), String.valueOf(mCurrentLocation.getLongitude()));
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
         }
     }
 
@@ -202,12 +214,16 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     @Override
     public void onLocationChanged(Location location) {
-        if ((mLastMarkerUpdateLocation != null) && (mLastMarkerUpdateLocation.distanceTo(location) >= 500)) {
-            updateMarker();
-        }
+        if (mapReady) {
+            if ((mLastMarkerUpdateLocation != null) && (mLastMarkerUpdateLocation.distanceTo(location) >= 500)) {
+                updateMarkers();
+            }
 
-        mCurrentLocation = location;
-        moveToCurrentLocation();
+            // System.out.println("Distance: " + mLastMarkerUpdateLocation.distanceTo(location));
+
+            mCurrentLocation = location;
+            moveToCurrentLocation();
+        }
     }
 
     public void getEntries(String lat, String lon) throws JSONException {
@@ -221,17 +237,14 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         params.put("pilimit", "50");
         params.put("generator", "geosearch");
         params.put("ggscoord", lat + "|" + lon);
-        params.put("ggsradius", "2000");
+        params.put("ggsradius", "4000");
         params.put("ggslimit", "50");
         params.put("format", "json");
         params.put("wbptterms", "description");
 
-        WikiRestClient.get("/", params, new JsonHttpResponseHandler() {
-
+        JsonHttpResponseHandler handler = new JsonHttpResponseHandler() {
             @Override
             public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
-                // If the response is JSONObject instead of expected JSONArray
-
                 mLastMarkerUpdateLocation = mCurrentLocation;
 
                 try {
@@ -242,8 +255,6 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                     // System.out.println(entries.names());
 
                     for (int i = 0; i < entries.names().length(); i++) {
-                        // System.out.println(entry);
-
                         String key = entries.names().getString(i);
                         JSONObject entry = entries.getJSONObject(key);
                         JSONObject terms = entry.optJSONObject("terms");
@@ -283,9 +294,13 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             @Override
             public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
                 System.out.println("status code: " + statusCode);
-                System.out.println("headers: " + headers);
+                System.out.println("headers: " + Arrays.toString(headers));
                 System.out.println("json: " + errorResponse);
             }
-        });
+        };
+
+        if (lat != null && lon != null) {
+            WikiRestClient.get("/", params, handler);
+        }
     }
 }

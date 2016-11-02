@@ -2,12 +2,18 @@ package de.htw_berlin.bischoff.daniel.wikiscout;
 
 import com.loopj.android.http.*;
 
-public class WikiRestClient {
+import cz.msebera.android.httpclient.client.params.ClientPNames;
+
+class WikiRestClient {
     private static final String BASE_URL = "https://de.wikipedia.org/w/api.php";
 
     private static AsyncHttpClient client = new AsyncHttpClient();
 
-    public static void get(String url, RequestParams params, AsyncHttpResponseHandler responseHandler) {
+    static void setup() {
+        client.getHttpClient().getParams().setParameter(ClientPNames.ALLOW_CIRCULAR_REDIRECTS, true);
+    }
+
+    static void get(String url, RequestParams params, AsyncHttpResponseHandler responseHandler) {
         client.get(getAbsoluteUrl(url), params, responseHandler);
     }
 
