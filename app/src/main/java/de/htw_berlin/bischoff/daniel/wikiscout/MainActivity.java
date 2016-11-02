@@ -243,14 +243,13 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
 
         RequestParams params = new RequestParams();
         params.put("action", "query");
-        params.put("prop", "coordinates|pageimages|pageterms");
+        params.put("prop", "coordinates|pageterms");
         params.put("colimit", "50");
-        params.put("piprop", "thumbnail");
         params.put("pithumbsize", "144");
         params.put("pilimit", "50");
         params.put("generator", "geosearch");
         params.put("ggscoord", lat + "|" + lon);
-        params.put("ggsradius", "4000");
+        params.put("ggsradius", "3000");
         params.put("ggslimit", "50");
         params.put("format", "json");
         params.put("wbptterms", "description");
