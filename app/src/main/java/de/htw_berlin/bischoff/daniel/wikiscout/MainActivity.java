@@ -45,7 +45,8 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
     private GoogleMap mMap;
     private boolean mapReady;
 
-    private static final long UPDATE_INTERVAL_IN_MILLISECONDS = 5000;
+    private static final int DEFAULT_ZOOM = 15;
+    private static final int UPDATE_INTERVAL_IN_MILLISECONDS = 5000;
     private static final long FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS = UPDATE_INTERVAL_IN_MILLISECONDS / 5;
 
     @Override
@@ -63,6 +64,18 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
 
         ImageLoaderConfiguration config = new ImageLoaderConfiguration.Builder(this).build();
         ImageLoader.getInstance().init(config);
+    }
+
+    @Override
+    protected void onRestart() {
+        super.onRestart();
+        if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                buildGoogleApiClient();
+            }
+        } else {
+            buildGoogleApiClient();
+        }
     }
 
     @Override
@@ -173,7 +186,7 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
 
     private void moveToCurrentLocation() {
         if (mCurrentLocation != null) {
-            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(mCurrentLocation.getLatitude(), mCurrentLocation.getLongitude()), 17));
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(mCurrentLocation.getLatitude(), mCurrentLocation.getLongitude()), DEFAULT_ZOOM));
         }
     }
 
