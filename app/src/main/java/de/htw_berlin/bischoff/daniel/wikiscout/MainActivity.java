@@ -43,7 +43,7 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
 
     private GoogleApiClient mGoogleApiClient;
     private Location mCurrentLocation;
-    private Location mLastMarkerUpdateLocation;
+    private Location markersUpdatedAt;
     private GoogleMap mMap;
     private boolean mapReady;
     private FusedLocationProviderApi fusedLocationProviderApi;
@@ -99,27 +99,26 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
             mMap.setMyLocationEnabled(true);
         }
 
-        mMap.setOnMarkerClickListener(
-                new GoogleMap.OnMarkerClickListener() {
-                    public boolean onMarkerClick(Marker marker) {
-                        if (lastOpenedMarker != null) {
-                            lastOpenedMarker.hideInfoWindow();
-                            if (lastOpenedMarker.equals(marker)) {
-                                lastOpenedMarker = null;
+        mMap.setOnMarkerClickListener(new GoogleMap.OnMarkerClickListener() {
+            public boolean onMarkerClick(Marker marker) {
+                if (lastOpenedMarker != null) {
+                    lastOpenedMarker.hideInfoWindow();
 
-                                // Return true so that the info window isn't opened again
-                                return true;
-                            }
-                        }
+                    if (lastOpenedMarker.equals(marker)) {
+                        lastOpenedMarker = null;
 
-                        marker.showInfoWindow();
-
-                        lastOpenedMarker = marker;
-
-                        // Prevent camera of moving to center
+                        // Return true so that the info window isn't opened again
                         return true;
                     }
-                });
+                }
+
+                marker.showInfoWindow();
+                lastOpenedMarker = marker;
+
+                // Prevent camera of moving to center
+                return true;
+            }
+        });
 
         mMap.setOnInfoWindowClickListener(new GoogleMap.OnInfoWindowClickListener() {
             @Override
@@ -289,11 +288,11 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
         System.out.println("LOCATION: " + mCurrentLocation);
 
         if (mapReady) {
-            if (mLastMarkerUpdateLocation == null || mLastMarkerUpdateLocation.distanceTo(location) >= 500) {
+            if (markersUpdatedAt == null || markersUpdatedAt.distanceTo(location) >= 500) {
                 updateMarkers();
             }
 
-            // System.out.println("Distance: " + mLastMarkerUpdateLocation.distanceTo(location));
+            // System.out.println("Distance: " + markersUpdatedAt.distanceTo(location));
 
             moveToCurrentLocation();
         }
@@ -317,35 +316,43 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
         JsonHttpResponseHandler handler = new JsonHttpResponseHandler() {
             @Override
             public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
-                mLastMarkerUpdateLocation = mCurrentLocation;
+                markersUpdatedAt = mCurrentLocation;
+
+                JSONObject query;
+                JSONObject entries = null;
 
                 try {
-                    JSONObject entries = response.getJSONObject("query").getJSONObject("pages");
-
+                    query = response.optJSONObject("query");
+                    entries = query.optJSONObject("pages");
                     System.out.println("Downloaded entries: " + entries.names().length());
-                    // System.out.println("Response: " + entries);
-                    // System.out.println(entries.names());
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
 
-                    for (int i = 0; i < entries.names().length(); i++) {
-                        String key = entries.names().getString(i);
-                        JSONObject entry = entries.getJSONObject(key);
-                        JSONObject terms = entry.optJSONObject("terms");
-                        JSONArray coordinates = entry.optJSONArray("coordinates");
+                assert entries != null;
 
-                        String wikiPageTitle;
-                        double lat = 0.0;
-                        double lon = 0.0;
-                        String description = null;
+                for (int i = 0; i < entries.names().length(); i++) {
+                    String entryKey;
+                    String wikiPageTitle ;
+                    String description = null;
+                    JSONObject entry;
+                    JSONObject terms;
+                    JSONArray coordinates;
+                    double lat;
+                    double lon;
 
-                        wikiPageTitle = entry.optString("title");
+                    try {
+                        entryKey = entries.names().getString(i);
+                        entry = entries.getJSONObject(entryKey);
+                        terms = entry.optJSONObject("terms");
+                        coordinates = entry.getJSONArray("coordinates");
+                        wikiPageTitle = entry.getString("title");
 
-                        if ((coordinates != null) && (coordinates.optJSONObject(0) != null)) {
-                            lat = coordinates.getJSONObject(0).optDouble("lat");
-                            lon = coordinates.getJSONObject(0).optDouble("lon");
+                        lat = coordinates.getJSONObject(0).getDouble("lat");
+                        lon = coordinates.getJSONObject(0).getDouble("lon");
 
-                            System.out.println("lat: " + lat);
-                            System.out.println("lon: " + lon);
-                        }
+                        System.out.println("lat: " + lat);
+                        System.out.println("lon: " + lon);
 
                         if ((terms != null) && (terms.optJSONArray("description") != null)) {
                             description = terms.optJSONArray("description").optString(0);
@@ -353,13 +360,11 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
                             System.out.println("description : " + description);
                         }
 
-                        if (wikiPageTitle != null && (lat != 0.0) && (lon != 0.0)) {
-                            addMarker(lat, lon, wikiPageTitle, description);
-                            System.out.println(entry);
-                        }
+                        addMarker(lat, lon, wikiPageTitle, description);
+                        System.out.println(entry);
+                    } catch (Exception e) {
+                        e.printStackTrace();
                     }
-                } catch (JSONException e) {
-                    e.printStackTrace();
                 }
             }
 
