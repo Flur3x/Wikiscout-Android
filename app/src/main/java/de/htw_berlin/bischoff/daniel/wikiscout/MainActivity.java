@@ -103,9 +103,9 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
                 System.out.println("CLICKED ON INFO WINDOW: " + marker.getTitle());
 
                 Intent intent = new Intent(getApplicationContext(), WikiEntryActivity.class);
-                String title = marker.getTitle();
+                String wikiPageTitle = marker.getTitle();
 
-                intent.putExtra("title", title);
+                intent.putExtra("wikiPageTitle", wikiPageTitle);
                 startActivity(intent);
             }
         });
@@ -272,12 +272,12 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
                         JSONObject terms = entry.optJSONObject("terms");
                         JSONArray coordinates = entry.optJSONArray("coordinates");
 
-                        String title;
+                        String wikiPageTitle;
                         double lat = 0.0;
                         double lon = 0.0;
                         String description = null;
 
-                        title = entry.optString("title");
+                        wikiPageTitle = entry.optString("title");
 
                         if ((coordinates != null) && (coordinates.optJSONObject(0) != null)) {
                             lat = coordinates.getJSONObject(0).optDouble("lat");
@@ -293,8 +293,8 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
                             System.out.println("description : " + description);
                         }
 
-                        if (title != null && (lat != 0.0) && (lon != 0.0)) {
-                            addMarker(lat, lon, title, description);
+                        if (wikiPageTitle != null && (lat != 0.0) && (lon != 0.0)) {
+                            addMarker(lat, lon, wikiPageTitle, description);
                             System.out.println(entry);
                         }
                     }
