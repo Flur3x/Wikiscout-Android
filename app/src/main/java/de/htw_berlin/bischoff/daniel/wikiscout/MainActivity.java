@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.Location;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
@@ -14,6 +15,7 @@ import android.support.v7.widget.Toolbar;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.location.FusedLocationProviderApi;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.LocationListener;
@@ -37,13 +39,15 @@ import cz.msebera.android.httpclient.Header;
 
 import static de.htw_berlin.bischoff.daniel.wikiscout.R.id.map;
 
-public class MainActivity extends RuntimePermissionsActivity implements OnMapReadyCallback, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LocationListener {
+public class MainActivity extends RuntimePermissionsActivity implements OnMapReadyCallback, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LocationListener, WikiEntryFragment.OnFragmentInteractionListener {
 
     private GoogleApiClient mGoogleApiClient;
     private Location mCurrentLocation;
     private Location mLastMarkerUpdateLocation;
     private GoogleMap mMap;
     private boolean mapReady;
+    private FusedLocationProviderApi fusedLocationProviderApi;
+    private LocationRequest mLocationRequest;
 
     private static final int DEFAULT_ZOOM = 15;
     private static final int UPDATE_INTERVAL_IN_MILLISECONDS = 5000;
@@ -84,16 +88,16 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
         mapReady = true;
 
         //enableMyLocationIcon
-        moveToCurrentLocation();
-        updateMarkers();
+        //moveToCurrentLocation();
+        //updateMarkers();
 
         if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                buildGoogleApiClient();
+                getLocation();
                 mMap.setMyLocationEnabled(true);
             }
         } else {
-            buildGoogleApiClient();
+            getLocation();
             mMap.setMyLocationEnabled(true);
         }
 
@@ -102,11 +106,26 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
             public void onInfoWindowClick(Marker marker) {
                 System.out.println("CLICKED ON INFO WINDOW: " + marker.getTitle());
 
-                Intent intent = new Intent(getApplicationContext(), WikiEntryActivity.class);
                 String wikiPageTitle = marker.getTitle();
 
-                intent.putExtra("wikiPageTitle", wikiPageTitle);
-                startActivity(intent);
+                if (findViewById(R.id.fragment_container) == null) {
+                    System.out.println("Call activity");
+
+                    Intent intent = new Intent(getApplicationContext(), WikiEntryActivity.class);
+
+                    intent.putExtra("wikiPageTitle", wikiPageTitle);
+                    startActivity(intent);
+                } else {
+                    System.out.println("Call fragment");
+
+                    WikiEntryFragment fragment = new WikiEntryFragment();
+                    Bundle bundle = new Bundle();
+
+                    bundle.putString("wikiPageTitle", wikiPageTitle);
+                    fragment.setArguments(bundle);
+
+                    getSupportFragmentManager().beginTransaction().replace(R.id.fragment_container, fragment).commit();
+                }
             }
         });
     }
@@ -167,22 +186,30 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
     }
 
     protected void onStop() {
-        mGoogleApiClient.disconnect();
+        if (mGoogleApiClient != null) {
+            mGoogleApiClient.disconnect();
+        }
         super.onStop();
     }
 
-    protected void startLocationUpdates() {
-        LocationRequest mLocationRequest = new LocationRequest();
+    protected void getLocation() {
+        mLocationRequest = new LocationRequest();
         mLocationRequest.setInterval(UPDATE_INTERVAL_IN_MILLISECONDS);
         mLocationRequest.setFastestInterval(FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS);
         mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
 
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, this);
-        } else {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, PermissionCodes.PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION);
-        }
+        fusedLocationProviderApi = LocationServices.FusedLocationApi;
+
+        mGoogleApiClient = new GoogleApiClient.Builder(this)
+                .addApi(LocationServices.API)
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .build();
+
+        mGoogleApiClient.connect();
     }
+
+
 
     private void moveToCurrentLocation() {
         if (mCurrentLocation != null) {
@@ -193,16 +220,16 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
     @Override
     public void onConnected(@Nullable Bundle bundle) {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            mCurrentLocation = LocationServices.FusedLocationApi.getLastLocation(mGoogleApiClient);
+            fusedLocationProviderApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, this);
+
+            Location lastLocation = fusedLocationProviderApi.getLastLocation(mGoogleApiClient);
+
+            if (lastLocation != null) {
+                onLocationChanged(lastLocation);
+            }
         } else {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, PermissionCodes.PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION);
         }
-
-        System.out.println("LOCATION: " + mCurrentLocation);
-
-        moveToCurrentLocation();
-        startLocationUpdates();
-        updateMarkers();
     }
 
     protected void updateMarkers() {
@@ -212,6 +239,8 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
             } catch (JSONException e) {
                 e.printStackTrace();
             }
+        } else {
+            System.out.println("Location unknown. Markers couldn't load. :(");
         }
     }
 
@@ -227,14 +256,17 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
 
     @Override
     public void onLocationChanged(Location location) {
+        mCurrentLocation = location;
+
+        System.out.println("LOCATION: " + mCurrentLocation);
+
         if (mapReady) {
-            if ((mLastMarkerUpdateLocation != null) && (mLastMarkerUpdateLocation.distanceTo(location) >= 500)) {
+            if (mLastMarkerUpdateLocation == null || mLastMarkerUpdateLocation.distanceTo(location) >= 500) {
                 updateMarkers();
             }
 
             // System.out.println("Distance: " + mLastMarkerUpdateLocation.distanceTo(location));
 
-            mCurrentLocation = location;
             moveToCurrentLocation();
         }
     }
@@ -314,5 +346,10 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
         if (lat != null && lon != null) {
             WikiRestClient.get("/", params, handler);
         }
+    }
+
+    @Override
+    public void onFragmentInteraction(Uri uri) {
+
     }
 }

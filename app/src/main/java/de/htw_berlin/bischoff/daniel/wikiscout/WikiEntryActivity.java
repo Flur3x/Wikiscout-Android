@@ -13,8 +13,6 @@ public class WikiEntryActivity extends FragmentActivity implements WikiEntryFrag
         setContentView(R.layout.activity_wiki_entry);
 
         Intent intent = getIntent();
-        String wikiPageTitle = intent.getStringExtra("wikiPageTitle");
-
 
         // Check that the activity is using the layout version with
         // the fragment_container FrameLayout

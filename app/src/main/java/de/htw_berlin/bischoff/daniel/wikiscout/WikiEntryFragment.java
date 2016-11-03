@@ -58,7 +58,7 @@ public class WikiEntryFragment extends Fragment {
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        View rootView =inflater.inflate(R.layout.fragment_wiki_entry, container, false);
+        View rootView = inflater.inflate(R.layout.wiki_entry, container, false);
 
         textView = (TextView) rootView.findViewById(R.id.textView);
         imageView = (ImageView) rootView.findViewById(R.id.image);
