@@ -48,6 +48,8 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
     private boolean mapReady;
     private FusedLocationProviderApi fusedLocationProviderApi;
     private LocationRequest mLocationRequest;
+    private WikiEntryFragment wikiEntryFragment;
+    private Marker lastOpenedMarker;
 
     private static final int DEFAULT_ZOOM = 15;
     private static final int UPDATE_INTERVAL_IN_MILLISECONDS = 5000;
@@ -87,10 +89,6 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
         mMap = googleMap;
         mapReady = true;
 
-        //enableMyLocationIcon
-        //moveToCurrentLocation();
-        //updateMarkers();
-
         if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
                 getLocation();
@@ -100,6 +98,28 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
             getLocation();
             mMap.setMyLocationEnabled(true);
         }
+
+        mMap.setOnMarkerClickListener(
+                new GoogleMap.OnMarkerClickListener() {
+                    public boolean onMarkerClick(Marker marker) {
+                        if (lastOpenedMarker != null) {
+                            lastOpenedMarker.hideInfoWindow();
+                            if (lastOpenedMarker.equals(marker)) {
+                                lastOpenedMarker = null;
+
+                                // Return true so that the info window isn't opened again
+                                return true;
+                            }
+                        }
+
+                        marker.showInfoWindow();
+
+                        lastOpenedMarker = marker;
+
+                        // Prevent camera of moving to center
+                        return true;
+                    }
+                });
 
         mMap.setOnInfoWindowClickListener(new GoogleMap.OnInfoWindowClickListener() {
             @Override
@@ -125,6 +145,17 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
                     fragment.setArguments(bundle);
 
                     getSupportFragmentManager().beginTransaction().replace(R.id.fragment_container, fragment).commit();
+                }
+            }
+        });
+
+        mMap.setOnMapClickListener(new GoogleMap.OnMapClickListener() {
+            @Override
+            public void onMapClick(LatLng arg0) {
+                wikiEntryFragment = (WikiEntryFragment) getSupportFragmentManager().findFragmentById(R.id.fragment_container);
+
+                if (wikiEntryFragment != null){
+                    getSupportFragmentManager().beginTransaction().remove(wikiEntryFragment).commit();
                 }
             }
         });
@@ -162,9 +193,6 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
     }
 
     public void addMarker(double lat, double lon, String title, String description) {
-        // System.out.println("New marker: " + title + " " + lat + " " + lon);
-        // System.out.println("Map and google client ready: " + (mapReady && googleApiClientReady));
-
         LatLng pos = new LatLng(lat, lon);
         mMap.addMarker(new MarkerOptions()
                 .position(pos)
@@ -294,8 +322,8 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
                 try {
                     JSONObject entries = response.getJSONObject("query").getJSONObject("pages");
 
-                    System.out.println("Response: " + entries);
-                    System.out.println("Entries: " + entries.names().length());
+                    System.out.println("Downloaded entries: " + entries.names().length());
+                    // System.out.println("Response: " + entries);
                     // System.out.println(entries.names());
 
                     for (int i = 0; i < entries.names().length(); i++) {

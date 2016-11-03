@@ -1,6 +1,7 @@
 package de.htw_berlin.bischoff.daniel.wikiscout;
 
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
@@ -15,6 +16,9 @@ import android.widget.TextView;
 import com.loopj.android.http.JsonHttpResponseHandler;
 import com.loopj.android.http.RequestParams;
 import com.nostra13.universalimageloader.core.ImageLoader;
+import com.nostra13.universalimageloader.core.assist.FailReason;
+import com.nostra13.universalimageloader.core.listener.ImageLoadingListener;
+import com.nostra13.universalimageloader.core.listener.ImageLoadingProgressListener;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -132,11 +136,7 @@ public class WikiEntryFragment extends Fragment {
                     // System.out.println("entry: " + entry);
                     System.out.println("image: " + imageUrl);
 
-                    setText(text);
-
-                    if (imageUrl != null) {
-                        setImage(imageUrl);
-                    }
+                    loadContent((imageUrl != null) ? imageUrl : null, text);
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
@@ -167,8 +167,35 @@ public class WikiEntryFragment extends Fragment {
         textView.setText(parsedHtml);
     }
 
-    public void setImage(String imageUrl) {
-        ImageLoader imageLoader = ImageLoader.getInstance();
-        imageLoader.displayImage(imageUrl, imageView);
+    public void loadContent(String imageUrl, final String text) {
+        if (imageUrl != null) {
+            ImageLoader imageLoader = ImageLoader.getInstance();
+
+            imageLoader.displayImage(imageUrl, imageView, null, new ImageLoadingListener() {
+                @Override
+                public void onLoadingStarted(String imageUri, View view) {}
+
+                @Override
+                public void onLoadingFailed(String imageUri, View view, FailReason failReason) {
+                    setText(text);
+                }
+
+                @Override
+                public void onLoadingComplete(String imageUri, View view, Bitmap loadedImage) {
+                    setText(text);
+                }
+
+                @Override
+                public void onLoadingCancelled(String imageUri, View view) {
+                    setText(text);
+                }
+
+            }, new ImageLoadingProgressListener() {
+                @Override
+                public void onProgressUpdate(String imageUri, View view, int current, int total) {}
+            });
+        } else {
+            setText(text);
+        }
     }
 }
