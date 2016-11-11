@@ -43,13 +43,13 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
 
     private GoogleApiClient mGoogleApiClient;
     private Location mCurrentLocation;
-    private Location markersUpdatedAt;
     private GoogleMap mMap;
     private boolean mapReady;
     private FusedLocationProviderApi fusedLocationProviderApi;
     private LocationRequest mLocationRequest;
     private WikiEntryFragment wikiEntryFragment;
     private Marker lastOpenedMarker;
+    private GlobalAppState appState;
 
     private static final int DEFAULT_ZOOM = 15;
     private static final int UPDATE_INTERVAL_IN_MILLISECONDS = 5000;
@@ -65,29 +65,34 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
 
         WikiRestClient.setup();
 
+        mGoogleApiClient = new GoogleApiClient.Builder(this)
+                .addApi(LocationServices.API)
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .build();
+
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(map);
         mapFragment.getMapAsync(this);
+        mapFragment.setRetainInstance(true);
 
         ImageLoaderConfiguration config = new ImageLoaderConfiguration.Builder(this).build();
         ImageLoader.getInstance().init(config);
     }
 
     @Override
-    protected void onRestart() {
-        super.onRestart();
-        if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                buildGoogleApiClient();
-            }
-        } else {
-            buildGoogleApiClient();
-        }
+    protected void onResume() {
+        appState = GlobalAppState.getInstance();
+        super.onResume();
     }
 
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
         mapReady = true;
+
+        if (mGoogleApiClient != null) {
+            mGoogleApiClient.connect();
+        }
 
         if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
@@ -123,20 +128,14 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
         mMap.setOnInfoWindowClickListener(new GoogleMap.OnInfoWindowClickListener() {
             @Override
             public void onInfoWindowClick(Marker marker) {
-                System.out.println("CLICKED ON INFO WINDOW: " + marker.getTitle());
-
                 String wikiPageTitle = marker.getTitle();
 
                 if (findViewById(R.id.fragment_container) == null) {
-                    System.out.println("Call activity");
-
                     Intent intent = new Intent(getApplicationContext(), WikiEntryActivity.class);
 
                     intent.putExtra("wikiPageTitle", wikiPageTitle);
                     startActivity(intent);
                 } else {
-                    System.out.println("Call fragment");
-
                     WikiEntryFragment fragment = new WikiEntryFragment();
                     Bundle bundle = new Bundle();
 
@@ -165,9 +164,7 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
         switch (requestCode) {
             case PermissionCodes.PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION: {
                 if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                    if (mGoogleApiClient == null) {
-                        buildGoogleApiClient();
-                    }
+                    getLocation();
                     mMap.setMyLocationEnabled(true);
                 }
             }
@@ -226,17 +223,7 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
         mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
 
         fusedLocationProviderApi = LocationServices.FusedLocationApi;
-
-        mGoogleApiClient = new GoogleApiClient.Builder(this)
-                .addApi(LocationServices.API)
-                .addConnectionCallbacks(this)
-                .addOnConnectionFailedListener(this)
-                .build();
-
-        mGoogleApiClient.connect();
     }
-
-
 
     private void moveToCurrentLocation() {
         if (mCurrentLocation != null) {
@@ -250,6 +237,10 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
             fusedLocationProviderApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, this);
 
             Location lastLocation = fusedLocationProviderApi.getLastLocation(mGoogleApiClient);
+
+            if (appState.getWikiJson() != null) {
+                processWikiJson(appState.getWikiJson());
+            }
 
             if (lastLocation != null) {
                 onLocationChanged(lastLocation);
@@ -288,11 +279,10 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
         System.out.println("LOCATION: " + mCurrentLocation);
 
         if (mapReady) {
-            if (markersUpdatedAt == null || markersUpdatedAt.distanceTo(location) >= 500) {
+            if (appState.getMarkersUpdatedAt() == null || appState.getMarkersUpdatedAt().distanceTo(location) >= 500) {
+                System.out.println("======> markersUpdatedAt: " + appState.getMarkersUpdatedAt());
                 updateMarkers();
             }
-
-            // System.out.println("Distance: " + markersUpdatedAt.distanceTo(location));
 
             moveToCurrentLocation();
         }
@@ -316,52 +306,7 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
         JsonHttpResponseHandler handler = new JsonHttpResponseHandler() {
             @Override
             public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
-                markersUpdatedAt = mCurrentLocation;
-
-                JSONObject query;
-                JSONObject entries = null;
-
-                try {
-                    query = response.optJSONObject("query");
-                    entries = query.optJSONObject("pages");
-                    System.out.println("Downloaded entries: " + entries.names().length());
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-
-                assert entries != null;
-
-                for (int i = 0; i < entries.names().length(); i++) {
-                    String entryKey;
-                    String wikiPageTitle ;
-                    String description = null;
-                    JSONObject entry;
-                    JSONObject terms;
-                    JSONArray coordinates;
-                    double lat;
-                    double lon;
-
-                    try {
-                        entryKey = entries.names().getString(i);
-                        entry = entries.getJSONObject(entryKey);
-                        terms = entry.optJSONObject("terms");
-                        coordinates = entry.getJSONArray("coordinates");
-                        wikiPageTitle = entry.getString("title");
-
-                        System.out.println(entry);
-
-                        lat = coordinates.getJSONObject(0).getDouble("lat");
-                        lon = coordinates.getJSONObject(0).getDouble("lon");
-
-                        if ((terms != null) && (terms.optJSONArray("description") != null)) {
-                            description = terms.optJSONArray("description").optString(0);
-                        }
-
-                        addMarker(lat, lon, wikiPageTitle, description);
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                }
+                processWikiJson(response);
             }
 
             @Override
@@ -374,6 +319,59 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
 
         if (lat != null && lon != null) {
             WikiRestClient.get("/", params, handler);
+            System.out.println("======> NEW REQUEST SENT");
+        }
+    }
+
+    protected void processWikiJson(JSONObject response) {
+        appState.setWikiJson(response);
+
+        JSONObject query;
+        JSONObject entries = null;
+
+        try {
+            query = response.optJSONObject("query");
+            entries = query.optJSONObject("pages");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        assert entries != null;
+
+        for (int i = 0; i < entries.names().length(); i++) {
+            String entryKey;
+            String wikiPageTitle ;
+            String description = null;
+            JSONObject entry;
+            JSONObject terms;
+            JSONArray coordinates;
+            double lat;
+            double lon;
+
+            try {
+                entryKey = entries.names().getString(i);
+                entry = entries.getJSONObject(entryKey);
+                terms = entry.optJSONObject("terms");
+                coordinates = entry.getJSONArray("coordinates");
+                wikiPageTitle = entry.getString("title");
+
+                // System.out.println(entry);
+
+                lat = coordinates.getJSONObject(0).getDouble("lat");
+                lon = coordinates.getJSONObject(0).getDouble("lon");
+
+                if ((terms != null) && (terms.optJSONArray("description") != null)) {
+                    description = terms.optJSONArray("description").optString(0);
+                }
+
+                addMarker(lat, lon, wikiPageTitle, description);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        if (mCurrentLocation != null) {
+            appState.setMarkersUpdatedAt(mCurrentLocation);
         }
     }
 

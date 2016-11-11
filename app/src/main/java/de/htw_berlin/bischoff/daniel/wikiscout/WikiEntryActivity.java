@@ -16,12 +16,7 @@ public class WikiEntryActivity extends AppCompatActivity implements WikiEntryFra
 
         Toolbar Toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(Toolbar);
-
-        try {
-            getSupportActionBar().setDisplayHomeAsUpEnabled(true); // todo doesn't work yet :(
-        } catch (NullPointerException e) {
-            e.printStackTrace();
-        }
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
 
         if (findViewById(R.id.fragment_container) != null) {
 
