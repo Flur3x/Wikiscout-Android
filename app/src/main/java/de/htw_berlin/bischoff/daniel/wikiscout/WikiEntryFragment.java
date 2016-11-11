@@ -40,8 +40,10 @@ public class WikiEntryFragment extends Fragment {
     public static WikiEntryFragment newInstance(String wikiPageTitle) {
         WikiEntryFragment fragment = new WikiEntryFragment();
         Bundle args = new Bundle();
+
         args.putString(ARG_TITLE, wikiPageTitle);
         fragment.setArguments(args);
+
         return fragment;
     }
 
@@ -77,8 +79,7 @@ public class WikiEntryFragment extends Fragment {
         if (context instanceof OnFragmentInteractionListener) {
             mListener = (OnFragmentInteractionListener) context;
         } else {
-            throw new RuntimeException(context.toString()
-                    + " must implement OnFragmentInteractionListener");
+            throw new RuntimeException(context.toString() + " must implement OnFragmentInteractionListener");
         }
     }
 

@@ -107,7 +107,7 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
                     if (lastOpenedMarker.equals(marker)) {
                         lastOpenedMarker = null;
 
-                        // Return true so that the info window isn't opened again
+                        // Return true so that the info window doesn't open again
                         return true;
                     }
                 }
@@ -348,20 +348,16 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
                         coordinates = entry.getJSONArray("coordinates");
                         wikiPageTitle = entry.getString("title");
 
+                        System.out.println(entry);
+
                         lat = coordinates.getJSONObject(0).getDouble("lat");
                         lon = coordinates.getJSONObject(0).getDouble("lon");
 
-                        System.out.println("lat: " + lat);
-                        System.out.println("lon: " + lon);
-
                         if ((terms != null) && (terms.optJSONArray("description") != null)) {
                             description = terms.optJSONArray("description").optString(0);
-
-                            System.out.println("description : " + description);
                         }
 
                         addMarker(lat, lon, wikiPageTitle, description);
-                        System.out.println(entry);
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
