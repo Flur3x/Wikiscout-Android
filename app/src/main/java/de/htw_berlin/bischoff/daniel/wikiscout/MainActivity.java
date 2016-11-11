@@ -196,15 +196,6 @@ public class MainActivity extends RuntimePermissionsActivity implements OnMapRea
                 .snippet(description != null ? description : ""));
     }
 
-    protected synchronized void buildGoogleApiClient() {
-        mGoogleApiClient = new GoogleApiClient.Builder(this)
-                .addConnectionCallbacks(this)
-                .addOnConnectionFailedListener(this)
-                .addApi(LocationServices.API)
-                .build();
-        mGoogleApiClient.connect();
-    }
-
     protected void onStart() {
         super.onStart();
     }
