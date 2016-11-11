@@ -33,7 +33,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name=".WikiEntryActivity"></activity>
+        <activity
+            android:name=".WikiEntryActivity"
+            android:parentActivityName="de.htw_berlin.bischoff.daniel.wikiscout.MainActivity" >
+        </activity>
     </application>
 
 </manifest>
